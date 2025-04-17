@@ -162,7 +162,7 @@ public class HttpServer {
         } else {
             return;
         }
-
+        System.out.println(path);
         if (!method.equals("GET")) {
             while (true) {
                 buffer.clear();
@@ -202,6 +202,12 @@ public class HttpServer {
             Box saveBox = new Box(HttpStatus.NO_HAVE_METHOD,"Method Not Allowed");
             getMethod.Get(socketChannel,saveBox);
         } else {
+            String[] paths = path.split("/");
+
+            for (int i = 0; i < paths.length; i++) {
+                System.out.println(paths[i]);
+            }
+
             if (pathMap.get(method).get(path) == null && pathParams.get(method).get(path) == null) {
                 Box saveBox = new Box(HttpStatus.NOT_FOUND,"NOT FOUND");
                 getMethod.Get(socketChannel,saveBox);
@@ -276,18 +282,15 @@ public class HttpServer {
 
     public void request(String Method,String path, BiFunction<Request, Reponse, Object> function) {
         List<String> listparam = detectParams(path);
-        if (listparam.size() > 1) {
-            if (pathMap.get(Method) == null) {
-                pathMap.put(Method, new HashMap<>());
+        if (pathMap.get(Method) == null) {
+            pathMap.put(Method, new HashMap<>());
+            if (listparam.size() > 1) {
+                pathParams.computeIfAbsent(Method, k -> new HashMap<>());
+                listparam.removeFirst();
+                pathParams.get(Method).put(path, listparam);
             }
-            pathMap.get(Method).put(path, function);
-        } else {
-            if (pathParams.get(Method) == null) {
-                pathParams.put(Method, new HashMap<>());
-            }
-            listparam.remove(0);
-            pathParams.get(Method).put(path, listparam);
         }
+        pathMap.get(Method).put(path, function);
     }
 
     public void stop() throws Exception {
