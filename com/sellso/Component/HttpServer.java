@@ -131,6 +131,35 @@ public class HttpServer {
         return outputStream.toString();
     }
 
+    private List<String> formatString(String path) {
+        List<String> allPath = new ArrayList<>();
+
+        if (!path.equals("/")) {
+            allPath.add(path);
+        }
+
+        String currentPath = path;
+        while (!currentPath.equals("/")) {
+
+            // lay dau gach cuoi cung nhe
+            int lastSlashIndex = currentPath.lastIndexOf("/", currentPath.length() - 2);
+            if (lastSlashIndex == -1) {
+                break;
+            }
+            // Tu dau gach cuoi cung lay chuoi tu dau den do
+            currentPath = currentPath.substring(0, lastSlashIndex + 1);
+            if (currentPath.length() > 1) {
+                // xoa dau gach
+                allPath.add(currentPath.substring(0, currentPath.length() - 1));
+            }
+        }
+
+        allPath.add("/");
+
+        System.out.println(allPath);
+        return allPath;
+    }
+
     private void handleReadRequest(SelectionKey key) throws IOException {
         SocketChannel socketChannel = (SocketChannel) key.channel();
         StringBuilder requestBuilder = new StringBuilder();
@@ -162,7 +191,6 @@ public class HttpServer {
         } else {
             return;
         }
-        System.out.println(path);
         if (!method.equals("GET")) {
             while (true) {
                 buffer.clear();
@@ -202,13 +230,20 @@ public class HttpServer {
             Box saveBox = new Box(HttpStatus.NO_HAVE_METHOD,"Method Not Allowed");
             getMethod.Get(socketChannel,saveBox);
         } else {
-            String[] paths = path.split("/");
+            List<String> pathFormat = formatString(path);
+            String realPath = "";
+            boolean isParams = false;
+            int lenghtParams = 0;
 
-            for (int i = 0; i < paths.length; i++) {
-                System.out.println(paths[i]);
+            for (int i = 0; pathFormat.size() > i; i++) {
+                if (pathMap.get(method).get(pathFormat.get(i)) != null) {
+                    realPath = pathFormat.get(i);
+                    break;
+                }
+                isParams = true;
+                lenghtParams = i;
             }
-
-            if (pathMap.get(method).get(path) == null && pathParams.get(method).get(path) == null) {
+            if (pathMap.get(method).get(realPath) == null && pathParams.get(method).get(realPath) == null) {
                 Box saveBox = new Box(HttpStatus.NOT_FOUND,"NOT FOUND");
                 getMethod.Get(socketChannel,saveBox);
                 closeConnection(key);
@@ -228,6 +263,9 @@ public class HttpServer {
                     request.setHeaders(headers);
                     request.setMethod(method);
                     request.setPath(path);
+                    if (isParams) {
+                        pathFormat.getFirst();
+                    }
 
                     var callback = pathMap.get(method).get(path).apply(request, reponse);
                     Box saveBox = new Box(HttpStatus.OK, callback.toString());
@@ -273,7 +311,6 @@ public class HttpServer {
         if (parts.length > 1) {
             for (int i = 1; i < parts.length; i++) {
                 String cleanParam = parts[i].replaceAll("\\}.*", "");
-                System.out.println(cleanParam);
                 paramNames.add(cleanParam);
             }
         }

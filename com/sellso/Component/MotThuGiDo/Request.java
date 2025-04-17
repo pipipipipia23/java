@@ -34,6 +34,14 @@ public class Request {
         this.headers = headers;
     }
 
+    public void setParams(Map<String, String> params) {
+        this.params = params;
+    }
+
+    public Map<String, String> getParams() {
+        return params;
+    }
+
     @Override
     public String toString() {
         return "Request{" +

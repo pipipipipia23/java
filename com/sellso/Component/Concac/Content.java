@@ -13,7 +13,6 @@ public class Content {
         content.append("Content-Length: " + box.getContentType().length() + "\r\n");
         content.append("\r\n");
         content.append(box.getContentType());
-        System.out.println(content);
         return content;
     };
 }
