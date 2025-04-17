@@ -260,14 +260,16 @@ public class HttpServer {
                     if (parts.length > 1) {
                         request.setBody(parts[1]);
                     }
+
                     request.setHeaders(headers);
                     request.setMethod(method);
                     request.setPath(path);
                     if (isParams) {
-                        pathFormat.getFirst(0);
+                        pathFormat.getFirst();
+                        System.out.println(lenghtParams);
                     }
 
-                    var callback = pathMap.get(method).get(path).apply(request, reponse);
+                    var callback = pathMap.get(method).get(realPath).apply(request, reponse);
                     Box saveBox = new Box(HttpStatus.OK, callback.toString());
                     getMethod.Get(socketChannel, saveBox);
                 }
@@ -321,13 +323,14 @@ public class HttpServer {
         List<String> listparam = detectParams(path);
         if (pathMap.get(Method) == null) {
             pathMap.put(Method, new HashMap<>());
-            if (listparam.size() > 1) {
-                pathParams.computeIfAbsent(Method, k -> new HashMap<>());
-                listparam.removeFirst();
-                pathParams.get(Method).put(path, listparam);
-            }
         }
-        pathMap.get(Method).put(path, function);
+        String realParam = "/" + listparam.getFirst();
+        pathMap.get(Method).put(realParam, function);
+        if (listparam.size() > 1) {
+            pathParams.computeIfAbsent(Method, k -> new HashMap<>());
+            listparam.removeFirst();
+            pathParams.get(Method).put(realParam, listparam);
+        }
     }
 
     public void stop() throws Exception {
