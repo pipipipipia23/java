@@ -264,9 +264,8 @@ public class HttpServer {
                     request.setMethod(method);
                     request.setPath(path);
                     if (isParams) {
-                        pathFormat.getFirst();
+                        pathFormat.getFirst(0);
                     }
-                    
 
                     var callback = pathMap.get(method).get(path).apply(request, reponse);
                     Box saveBox = new Box(HttpStatus.OK, callback.toString());
