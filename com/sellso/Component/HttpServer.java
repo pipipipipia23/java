@@ -4,6 +4,7 @@ import com.sellso.Component.Concac.Content;
 import com.sellso.Component.Data.Box;
 import com.sellso.Component.Enum.HttpStatus;
 import com.sellso.Component.Method.GetMethod;
+import com.sellso.Component.Method.PostMethod;
 import com.sellso.Component.MotThuGiDo.Reponse;
 import com.sellso.Component.MotThuGiDo.Request;
 import org.json.JSONObject;
@@ -31,6 +32,7 @@ public class HttpServer {
     private final Set<SocketChannel> blockingKeys = ConcurrentHashMap.newKeySet();
     private final Content GetContent = new Content();
     private final GetMethod getMethod = new GetMethod();
+    private final PostMethod postMethod = new PostMethod();
 
     private final Map<String, Map<String, BiFunction<Request, Reponse, Object>>> pathMap = new ConcurrentHashMap<>();
     private final Map<String, Map<String, List<String>>> pathParams = new ConcurrentHashMap<>();
@@ -304,9 +306,8 @@ public class HttpServer {
                 }
 
                 var callback = pathMap.get(method).get(matchedPath).apply(request, reponse);
-                System.out.println(reponse.getContentType());
                 Box saveBox = new Box(HttpStatus.OK, callback.toString(), reponse.getContentType());
-                getMethod.Get(socketChannel, saveBox);
+                postMethod.Post(socketChannel, saveBox);
             }
         }
 
