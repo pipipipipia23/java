@@ -49,14 +49,15 @@ public class HttpServer {
         System.out.println("HttpServer starting..." + serverSocketChannel.getLocalAddress());
         while (running) {
             int readyChannels = selector.select();
-            
+
             if (readyChannels == 0) {
                 continue;
             }
-            
+
             Set<SelectionKey> selectedKeys = selector.selectedKeys();
             Iterator<SelectionKey> keyIterator = selectedKeys.iterator();
-            
+
+            // lay key tiep theo de xu ly
             while (keyIterator.hasNext()) {
                 SelectionKey key = keyIterator.next();
                 keyIterator.remove();
@@ -64,7 +65,7 @@ public class HttpServer {
                 if (!key.isValid()) {
                     continue;
                 }
-                
+
                 try {
                     if (key.isAcceptable()) {
                         System.out.println("Acceptable");
@@ -74,16 +75,20 @@ public class HttpServer {
                         if (blockingKeys.contains(channel)) {
                             continue;
                         }
-                        
+
                         blockingKeys.add(channel);
-                        
+
+                        // khoa ngay cai OP_READ de no khong bi chay lien tuc vao acceptable hoac xu ly nua.
                         key.interestOps(key.interestOps() & ~SelectionKey.OP_READ);
-                        
+
                         final SelectionKey readKey = key;
                         executor.submit(() -> {
+                            // doan nay don gian chi la khi xu ly xong roi chay tiep den phan de enable lai cai OP_READ thoi
                             try {
                                 handleReadRequest(readKey);
                             } catch (Exception e) {
+                                // co exception tra ve thi close thoi.
+                                System.err.println("Error handling read request: " + e.getMessage());
                                 System.err.println("Error handling read request: " + e.getMessage());
                                 closeConnection(readKey);
                             } finally {
@@ -108,7 +113,8 @@ public class HttpServer {
             }
         }
     }
-    
+
+    // accept connection
     private void acceptConnection(SelectionKey key) throws IOException {
         ServerSocketChannel server = (ServerSocketChannel) key.channel();
         SocketChannel socketChannel = server.accept();
@@ -116,6 +122,7 @@ public class HttpServer {
         socketChannel.register(selector, SelectionKey.OP_READ);
     }
 
+    // doc body neu nhu khong doc het tu luc request
     private String readRequestBody(SocketChannel socketChannel, int length) throws IOException {
         ByteBuffer buffer = ByteBuffer.allocate(4096);
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -131,33 +138,13 @@ public class HttpServer {
         return outputStream.toString();
     }
 
-    private List<String> formatString(String path) {
-        List<String> allPath = new ArrayList<>();
-
-        if (!path.equals("/")) {
-            allPath.add(path);
+    private void closeConnection(SelectionKey key) {
+        try {
+            key.cancel();
+            key.channel().close();
+        } catch (IOException e) {
+            System.err.println("Error closing connection: " + e.getMessage());
         }
-
-        String currentPath = path;
-        while (!currentPath.equals("/")) {
-
-            // lay dau gach cuoi cung nhe
-            int lastSlashIndex = currentPath.lastIndexOf("/", currentPath.length() - 2);
-            if (lastSlashIndex == -1) {
-                break;
-            }
-            // Tu dau gach cuoi cung lay chuoi tu dau den do
-            currentPath = currentPath.substring(0, lastSlashIndex + 1);
-            if (currentPath.length() > 1) {
-                // xoa dau gach
-                allPath.add(currentPath.substring(0, currentPath.length() - 1));
-            }
-        }
-
-        allPath.add("/");
-
-        System.out.println(allPath);
-        return allPath;
     }
 
     private void handleReadRequest(SelectionKey key) throws IOException {
@@ -165,6 +152,7 @@ public class HttpServer {
         StringBuilder requestBuilder = new StringBuilder();
         ByteBuffer buffer = ByteBuffer.allocate(4096);
 
+        // cai nay xu ly doc roi noi vao chuoi boi vi minh chi set cho capacity cua no la 4096
         while (true) {
             buffer.clear();
             int bytesRead = socketChannel.read(buffer);
@@ -180,7 +168,7 @@ public class HttpServer {
             }
         }
 
-        // format get method, path
+        // format de lay ra method , path
         String[] requestLines = requestBuilder.toString().split("\r\n");
         String[] requestLine = requestLines[0].split(" ");
         String method = "";
@@ -204,18 +192,18 @@ public class HttpServer {
         } else {
             int bytesRead = socketChannel.read(buffer);
             if (bytesRead != 0) {
-                Box saveBox = new Box(HttpStatus.MAX_LENGTH,"Max Length For Get");
+                Box saveBox = new Box(HttpStatus.MAX_LENGTH,"Max Length For Get", "Content-Type: text/html");
                 getMethod.Get(socketChannel,saveBox);
             }
         }
 
-        // format get body, header
+        // format de lay ra header, body
 
         String[] parts = requestBuilder.toString().split("(\r\n\r\n|\n\n)");
 
         Map<String, String> headers = new HashMap<>();
 
-        // for header
+        // xu ly header de add vao reponse
 
         String headerdata[] = parts[0].split("\n");
 
@@ -225,110 +213,163 @@ public class HttpServer {
                 headers.put(headerParts[0], headerParts[1]);
             }
         }
+
         if (pathMap.get(method) == null && pathParams.get(method) == null) {
-            System.out.println("here?");
-            Box saveBox = new Box(HttpStatus.NO_HAVE_METHOD,"Method Not Allowed");
+            System.out.println("Method not supported");
+            Box saveBox = new Box(HttpStatus.NO_HAVE_METHOD,"Method Not Allowed", "Content-Type: text/html");
             getMethod.Get(socketChannel,saveBox);
+            closeConnection(key);
+            return;
+        }
+
+        String matchedPath = null;
+        Map<String, String> params = new HashMap<>();
+
+        // cai nay neu khong co params thi se contanskey duoc luon.
+        if (pathMap.get(method) != null && pathMap.get(method).containsKey(path)) {
+            System.out.println(path);
+            matchedPath = path;
         } else {
-            List<String> pathFormat = formatString(path);
-            String realPath = "";
-            boolean isParams = false;
-            int lenghtParams = 0;
-
-            for (int i = 0; pathFormat.size() > i; i++) {
-                if (pathMap.get(method).get(pathFormat.get(i)) != null) {
-                    realPath = pathFormat.get(i);
-                    break;
-                }
-                isParams = true;
-                lenghtParams = i;
-            }
-            if (pathMap.get(method).get(realPath) == null && pathParams.get(method).get(realPath) == null) {
-                Box saveBox = new Box(HttpStatus.NOT_FOUND,"NOT FOUND");
-                getMethod.Get(socketChannel,saveBox);
-                closeConnection(key);
-                return;
-            }
-            Reponse reponse = new Reponse();
-            Request request = new Request();
-
-            switch (method) {
-                case "GET" -> {
-                    // request, reponse
-                    reponse.setContentType(headers.get("Content-Type"));
-                    reponse.setHeaders(headers);
-                    if (parts.length > 1) {
-                        request.setBody(parts[1]);
+            // check xem params co ton tai khong
+            if (pathParams.get(method) != null) {
+                // lay het key set ra de so sanh voi path.
+                for (String patternPath : pathParams.get(method).keySet()) {
+                    Map<String, String> extractedParams = matchPathWithPattern(path, patternPath);
+                    if (extractedParams != null) {
+                        matchedPath = patternPath;
+                        params = extractedParams;
+                        break;
                     }
-                    request.setHeaders(headers);
-                    request.setMethod(method);
-                    request.setPath(path);
-                    if (isParams) {
-                        pathFormat.getFirst();
-                    }
-                    
-
-                    var callback = pathMap.get(method).get(path).apply(request, reponse);
-                    Box saveBox = new Box(HttpStatus.OK, callback.toString());
-                    getMethod.Get(socketChannel, saveBox);
-                }
-                case "POST", "DELETE", "PUT" -> {
-                    int contentLength = 0;
-                    if (headers.containsKey("Content-Length")) {
-                        contentLength = Integer.parseInt(headers.get("Content-Length").trim());
-                    }
-
-                    String body;
-                    if (parts.length > 1) {
-                        body = parts[1];
-                    } else if (contentLength > 0) {
-                        body = readRequestBody(socketChannel, contentLength);
-                    } else {
-                        System.out.println("No body in request");
-                        body = "";
-                    }
-//                    body
-                    JSONObject jsonObject = new JSONObject(body);
-                    System.out.println(jsonObject);
                 }
             }
         }
+
+        if (matchedPath == null) {
+            System.out.println("Path not found: " + path);
+            Box saveBox = new Box(HttpStatus.NOT_FOUND, "NOT FOUND", "Content-Type: text/html");
+            getMethod.Get(socketChannel, saveBox);
+            closeConnection(key);
+            return;
+        }
+
+        Reponse reponse = new Reponse();
+        Request request = new Request();
+
+        switch (method) {
+            case "GET" -> {
+                // request, reponse
+                reponse.setContentType(headers.get("Content-Type"));
+                reponse.setHeaders(headers);
+                if (parts.length > 1) {
+                    request.setBody(parts[1]);
+                }
+                request.setHeaders(headers);
+                request.setMethod(method);
+                request.setPath(path);
+                request.setParams(params);
+
+                var callback = pathMap.get(method).get(matchedPath).apply(request, reponse);
+                System.out.println(reponse.getContentType());
+                Box saveBox = new Box(HttpStatus.OK, callback.toString(), reponse.getContentType());
+                getMethod.Get(socketChannel, saveBox);
+            }
+            case "POST", "DELETE", "PUT" -> {
+                int contentLength = 0;
+                if (headers.containsKey("Content-Length")) {
+                    contentLength = Integer.parseInt(headers.get("Content-Length").trim());
+                }
+
+                String body;
+                if (parts.length > 1) {
+                    body = parts[1];
+                } else if (contentLength > 0) {
+                    body = readRequestBody(socketChannel, contentLength);
+                } else {
+                    System.out.println("No body in request");
+                    body = "";
+                }
+
+                request.setHeaders(headers);
+                request.setMethod(method);
+                request.setPath(path);
+                request.setParams(params);
+
+                if (!body.isEmpty()) {
+                    try {
+                        JSONObject jsonObject = new JSONObject(body);
+                        request.setBody(jsonObject.toString());
+                    } catch (Exception e) {
+                        request.setBody(body);
+                    }
+                }
+
+                var callback = pathMap.get(method).get(matchedPath).apply(request, reponse);
+                System.out.println(reponse.getContentType());
+                Box saveBox = new Box(HttpStatus.OK, callback.toString(), reponse.getContentType());
+                getMethod.Get(socketChannel, saveBox);
+            }
+        }
+        
         closeConnection(key);
     }
 
-    private void closeConnection(SelectionKey key) {
-        try {
-            key.channel().close();
-            key.cancel();
-        } catch (IOException e) {
-            System.err.println("Error closing connection: " + e.getMessage());
+    private Map<String, String> matchPathWithPattern(String actualPath, String patternPath) {
+        String[] actualParts = actualPath.split("/");
+        String[] patternParts = patternPath.split("/");
+        // so sanh 2 chuoi giong nhau thi la ra path
+        if (actualParts.length != patternParts.length) {
+            return null;
         }
-    }
-
-    private List<String> detectParams(String path) {
-        String[] parts = path.split("\\{");
-        List<String> paramNames = new ArrayList<>();
-        paramNames.add(parts[0].replaceAll("/" , ""));
-        if (parts.length > 1) {
-            for (int i = 1; i < parts.length; i++) {
-                String cleanParam = parts[i].replaceAll("\\}.*", "");
-                paramNames.add(cleanParam);
+        
+        Map<String, String> params = new HashMap<>();
+        
+        for (int i = 0; i < patternParts.length; i++) {
+            String patternPart = patternParts[i];
+            String actualPart = actualParts[i];
+            // format lay params o ben trong {params}
+            if (patternPart.startsWith("{") && patternPart.endsWith("}")) {
+                String paramName = patternPart.substring(1, patternPart.length() - 1);
+                params.put(paramName, actualPart);
+            }
+            // neu khong co trong ngoac {} thi so sanh voi nhau thoi? neu khac thi tra null thoi
+            else if (!patternPart.equals(actualPart)) {
+                return null;
             }
         }
+        
+        return params;
+    }
+
+    // check xem co dung la path chua param khong? roi tra ve params
+    private List<String> detectParams(String path) {
+        String[] parts = path.split("/");
+        List<String> paramNames = new ArrayList<>();
+        
+        for (String part : parts) {
+            if (part.isEmpty()) continue;
+            // lay phan tu params ben trong {params}
+            if (part.startsWith("{") && part.endsWith("}")) {
+                paramNames.add(part.substring(1, part.length() - 1));
+            }
+        }
+        
         return paramNames;
     }
 
-    public void request(String Method,String path, BiFunction<Request, Reponse, Object> function) {
-        List<String> listparam = detectParams(path);
+    // add request method, add path
+    public void request(String Method, String path, BiFunction<Request, Reponse, Object> function) {
+        List<String> paramNames = detectParams(path);
+        
         if (pathMap.get(Method) == null) {
             pathMap.put(Method, new HashMap<>());
-            if (listparam.size() > 1) {
-                pathParams.computeIfAbsent(Method, k -> new HashMap<>());
-                listparam.removeFirst();
-                pathParams.get(Method).put(path, listparam);
-            }
         }
+        
         pathMap.get(Method).put(path, function);
+        
+        if (!paramNames.isEmpty()) {
+            pathParams.computeIfAbsent(Method, k -> new HashMap<>());
+            pathParams.get(Method).put(path, paramNames);
+        }
     }
 
     public void stop() throws Exception {
@@ -340,3 +381,4 @@ public class HttpServer {
         System.out.println("HttpServer stopped.");
     }
 }
+

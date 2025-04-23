@@ -9,12 +9,11 @@ public class Main {
 
             httpServer.request("GET", "/{params1}/{params2}/{params3}", (request, response) -> {
                 response.setStatus(200);
-                System.out.println(request.toString());
-//                System.out.println(response.toString());
+                response.setContentType("text/html; charset=utf-8");
                 return "Hello, World!";
             });
 
-            httpServer.request("GET", "/vaicalon", (request, response) -> {
+            httpServer.request("GET", "/vaicalon/{params1}/{params2}/{params3}", (request, response) -> {
                 return "VaiCaLon!";
             });
 

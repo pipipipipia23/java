@@ -9,10 +9,10 @@ public class Content {
         Box box = (Box) something;
         StringBuilder content = new StringBuilder();
         content.append("HTTP/1.1 " + box.getStatus().getCode() + " " + box.getStatus().getMessage() + "\r\n");
-        content.append("Content-Type: text/html\r\n");
-        content.append("Content-Length: " + box.getContentType().length() + "\r\n");
+        content.append("Content-Type: " + box.getContentType() +"\r\n");
+        content.append("Content-Length: " + box.getContent().length() + "\r\n");
         content.append("\r\n");
-        content.append(box.getContentType());
+        content.append(box.getContent());
         return content;
     };
 }
