@@ -240,37 +240,6 @@ public class HttpServer {
                         params = extractedParams;
                         break;
                     }
-
-                    request.setHeaders(headers);
-                    request.setMethod(method);
-                    request.setPath(path);
-                    if (isParams) {
-                        pathFormat.getFirst();
-                        System.out.println(lenghtParams);
-                    }
-
-                    var callback = pathMap.get(method).get(realPath).apply(request, reponse);
-                    Box saveBox = new Box(HttpStatus.OK, callback.toString());
-                    getMethod.Get(socketChannel, saveBox);
-                }
-                case "POST", "DELETE", "PUT" -> {
-                    int contentLength = 0;
-                    if (headers.containsKey("Content-Length")) {
-                        contentLength = Integer.parseInt(headers.get("Content-Length").trim());
-                    }
-
-                    String body;
-                    if (parts.length > 1) {
-                        body = parts[1];
-                    } else if (contentLength > 0) {
-                        body = readRequestBody(socketChannel, contentLength);
-                    } else {
-                        System.out.println("No body in request");
-                        body = "";
-                    }
-//                    body
-                    JSONObject jsonObject = new JSONObject(body);
-                    System.out.println(jsonObject);
                 }
             }
         }
@@ -340,7 +309,7 @@ public class HttpServer {
                 getMethod.Get(socketChannel, saveBox);
             }
         }
-        
+
         closeConnection(key);
     }
 
@@ -351,9 +320,9 @@ public class HttpServer {
         if (actualParts.length != patternParts.length) {
             return null;
         }
-        
+
         Map<String, String> params = new HashMap<>();
-        
+
         for (int i = 0; i < patternParts.length; i++) {
             String patternPart = patternParts[i];
             String actualPart = actualParts[i];
@@ -367,7 +336,7 @@ public class HttpServer {
                 return null;
             }
         }
-        
+
         return params;
     }
 
@@ -375,7 +344,7 @@ public class HttpServer {
     private List<String> detectParams(String path) {
         String[] parts = path.split("/");
         List<String> paramNames = new ArrayList<>();
-        
+
         for (String part : parts) {
             if (part.isEmpty()) continue;
             // lay phan tu params ben trong {params}
@@ -383,29 +352,23 @@ public class HttpServer {
                 paramNames.add(part.substring(1, part.length() - 1));
             }
         }
-        
+
         return paramNames;
     }
 
     // add request method, add path
     public void request(String Method, String path, BiFunction<Request, Reponse, Object> function) {
         List<String> paramNames = detectParams(path);
-        
+
         if (pathMap.get(Method) == null) {
             pathMap.put(Method, new HashMap<>());
-        }        
+        }
+
         pathMap.get(Method).put(path, function);
-        
+
         if (!paramNames.isEmpty()) {
             pathParams.computeIfAbsent(Method, k -> new HashMap<>());
             pathParams.get(Method).put(path, paramNames);
-        }
-        String realParam = "/" + listparam.getFirst();
-        pathMap.get(Method).put(realParam, function);
-        if (listparam.size() > 1) {
-            pathParams.computeIfAbsent(Method, k -> new HashMap<>());
-            listparam.removeFirst();
-            pathParams.get(Method).put(realParam, listparam);
         }
     }
 
