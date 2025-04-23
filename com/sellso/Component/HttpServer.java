@@ -240,6 +240,37 @@ public class HttpServer {
                         params = extractedParams;
                         break;
                     }
+
+                    request.setHeaders(headers);
+                    request.setMethod(method);
+                    request.setPath(path);
+                    if (isParams) {
+                        pathFormat.getFirst();
+                        System.out.println(lenghtParams);
+                    }
+
+                    var callback = pathMap.get(method).get(realPath).apply(request, reponse);
+                    Box saveBox = new Box(HttpStatus.OK, callback.toString());
+                    getMethod.Get(socketChannel, saveBox);
+                }
+                case "POST", "DELETE", "PUT" -> {
+                    int contentLength = 0;
+                    if (headers.containsKey("Content-Length")) {
+                        contentLength = Integer.parseInt(headers.get("Content-Length").trim());
+                    }
+
+                    String body;
+                    if (parts.length > 1) {
+                        body = parts[1];
+                    } else if (contentLength > 0) {
+                        body = readRequestBody(socketChannel, contentLength);
+                    } else {
+                        System.out.println("No body in request");
+                        body = "";
+                    }
+//                    body
+                    JSONObject jsonObject = new JSONObject(body);
+                    System.out.println(jsonObject);
                 }
             }
         }
@@ -362,13 +393,19 @@ public class HttpServer {
         
         if (pathMap.get(Method) == null) {
             pathMap.put(Method, new HashMap<>());
-        }
-        
+        }        
         pathMap.get(Method).put(path, function);
         
         if (!paramNames.isEmpty()) {
             pathParams.computeIfAbsent(Method, k -> new HashMap<>());
             pathParams.get(Method).put(path, paramNames);
+        }
+        String realParam = "/" + listparam.getFirst();
+        pathMap.get(Method).put(realParam, function);
+        if (listparam.size() > 1) {
+            pathParams.computeIfAbsent(Method, k -> new HashMap<>());
+            listparam.removeFirst();
+            pathParams.get(Method).put(realParam, listparam);
         }
     }
 
