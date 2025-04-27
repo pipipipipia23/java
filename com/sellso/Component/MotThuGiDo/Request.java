@@ -9,6 +9,8 @@ public class Request {
     private String body;
     private Map<String, String> headers = new HashMap<>();
     private Map<String, String> params = new HashMap<>();
+    private Map<String, String> cookies = new HashMap<>();
+    private Map<String, Object> session = new HashMap<>();
 
     public Request() {
     }
@@ -53,8 +55,32 @@ public class Request {
         this.params = params;
     }
 
+    public Map<String, String> getCookies() {
+        return cookies;
+    }
+
+    public void setCookies(Map<String, String> cookies) {
+        this.cookies = cookies;
+    }
+
+    public Map<String, Object> getSession() {
+        return session;
+    }
+
+    public void setSession(Map<String, Object> session) {
+        this.session = session;
+    }
+
     public String getParam(String name) {
-        return params.get(name);
+        return params != null ? params.get(name) : null;
+    }
+
+    public String getHeader(String name) {
+        return headers != null ? headers.get(name) : null;
+    }
+
+    public String getCookie(String name) {
+        return cookies != null ? cookies.get(name) : null;
     }
 
     @Override
@@ -65,6 +91,8 @@ public class Request {
                 ", body='" + body + '\'' +
                 ", headers=" + headers +
                 ", params=" + params +
+                ", cookies=" + cookies +
+                ", session=" + session +
                 '}';
     }
 }

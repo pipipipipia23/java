@@ -14,6 +14,7 @@ public enum HttpStatus {
     NOT_FOUND(404, "Not Found"),
     NO_HAVE_METHOD(405, "Method Not Allowed"),
     MAX_LENGTH(413, "Payload Too Large"),
+    METHOD_NOT_ALLOWED(405, "Method Not Allowed"),
     INTERNAL_SERVER_ERROR(500, "Internal Server Error");
 
     private final int code;

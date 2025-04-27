@@ -4,6 +4,7 @@ import com.sellso.Component.Concac.Content;
 import com.sellso.Component.Data.Box;
 import com.sellso.Component.Enum.HttpStatus;
 import com.sellso.Component.Method.GetMethod;
+import com.sellso.Component.Method.PostMethod;
 import com.sellso.Component.MotThuGiDo.Reponse;
 import com.sellso.Component.MotThuGiDo.Request;
 import org.json.JSONObject;
@@ -21,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.BiFunction;
+import java.util.UUID;
 
 public class HttpServer {
     ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
@@ -31,9 +33,11 @@ public class HttpServer {
     private final Set<SocketChannel> blockingKeys = ConcurrentHashMap.newKeySet();
     private final Content GetContent = new Content();
     private final GetMethod getMethod = new GetMethod();
+    private final PostMethod postMethod = new PostMethod();
 
     private final Map<String, Map<String, BiFunction<Request, Reponse, Object>>> pathMap = new ConcurrentHashMap<>();
     private final Map<String, Map<String, List<String>>> pathParams = new ConcurrentHashMap<>();
+    private final Map<String, Map<String, Object>> sessions = new ConcurrentHashMap<>();
 
     public HttpServer(int Port) throws Exception {
         serverSocketChannel = ServerSocketChannel.open();
@@ -244,22 +248,26 @@ public class HttpServer {
             }
         }
 
+        Reponse reponse = new Reponse();
+        Request request = new Request();
+
         if (matchedPath == null) {
             System.out.println("Path not found: " + path);
             Box saveBox = new Box(HttpStatus.NOT_FOUND, "NOT FOUND", "Content-Type: text/html");
-            getMethod.Get(socketChannel, saveBox);
+            sendResponse(socketChannel, saveBox, reponse);
             closeConnection(key);
             return;
         }
 
-        Reponse reponse = new Reponse();
-        Request request = new Request();
+        if (headers.containsKey("Cookie")) {
+            request.setCookies(parseCookies(headers.get("Cookie")));
+        }
+
+        // handleSession(request, reponse);
 
         switch (method) {
             case "GET" -> {
                 // request, reponse
-                reponse.setContentType(headers.get("Content-Type"));
-                reponse.setHeaders(headers);
                 if (parts.length > 1) {
                     request.setBody(parts[1]);
                 }
@@ -269,9 +277,8 @@ public class HttpServer {
                 request.setParams(params);
 
                 var callback = pathMap.get(method).get(matchedPath).apply(request, reponse);
-                System.out.println(reponse.getContentType());
                 Box saveBox = new Box(HttpStatus.OK, callback.toString(), reponse.getContentType());
-                getMethod.Get(socketChannel, saveBox);
+                sendResponse(socketChannel, saveBox, reponse);
             }
             case "POST", "DELETE", "PUT" -> {
                 int contentLength = 0;
@@ -304,13 +311,47 @@ public class HttpServer {
                 }
 
                 var callback = pathMap.get(method).get(matchedPath).apply(request, reponse);
-                System.out.println(reponse.getContentType());
                 Box saveBox = new Box(HttpStatus.OK, callback.toString(), reponse.getContentType());
-                getMethod.Get(socketChannel, saveBox);
+                sendResponse(socketChannel, saveBox, reponse);
+            }
+            default -> {
+                System.out.println("Unsupported HTTP method: " + method);
+                Box saveBox = new Box(HttpStatus.METHOD_NOT_ALLOWED, "Method Not Allowed", "Content-Type: text/html");
+                sendResponse(socketChannel, saveBox, reponse);
             }
         }
 
         closeConnection(key);
+    }
+
+    private void sendResponse(SocketChannel socketChannel, Box saveBox, Reponse reponse) throws IOException {
+        initResponseHeaders(reponse);
+        
+        if (!reponse.getCookies().isEmpty()) {
+            for (Map.Entry<String, String> cookie : reponse.getCookies().entrySet()) {
+                saveBox.addHeader("Set-Cookie", cookie.getKey() + "=" + cookie.getValue());
+            }
+        }
+        
+        if (reponse.getHeaders() != null) {
+            for (Map.Entry<String, String> header : reponse.getHeaders().entrySet()) {
+                if (!header.getKey().equalsIgnoreCase("Cookie")) {
+                    saveBox.addHeader(header.getKey(), header.getValue());
+                }
+            }
+        }
+        
+        if (reponse.getContentType() != null) {
+            saveBox.setContentType(reponse.getContentType());
+        }
+        
+        getMethod.Get(socketChannel, saveBox);
+    }
+
+    private void initResponseHeaders(Reponse response) {
+        if (response.getContentType() == null) {
+            response.setContentType("text/html; charset=utf-8");
+        }
     }
 
     private Map<String, String> matchPathWithPattern(String actualPath, String patternPath) {
@@ -380,5 +421,41 @@ public class HttpServer {
         executor.shutdown();
         System.out.println("HttpServer stopped.");
     }
-}
 
+    private Map<String, String> parseCookies(String cookieHeader) {
+        //format theo dang cookies ? don gian vi cookies no nam tren header va co dinh dang la
+        // ex: SessionId=123456; Path=/; HttpOnly
+        Map<String, String> cookies = new HashMap<>();
+        if (cookieHeader != null) {
+            String[] cookiePairs = cookieHeader.split("; ");
+            for (String pair : cookiePairs) {
+                String[] keyValue = pair.split("=", 2);
+                if (keyValue.length == 2) {
+                    cookies.put(keyValue[0], keyValue[1]);
+                }
+            }
+        }
+        return cookies;
+    }
+
+    private String generateSessionId() {
+        return UUID.randomUUID().toString();
+    }
+
+    private void BuildHeader() {
+
+    }
+
+    private void handleSession(Request request, Reponse response) {
+        Map<String, String> cookies = request.getCookies();
+        String sessionId = cookies.get("SESSIONID");
+
+        if (sessionId == null || !sessions.containsKey(sessionId)) {
+            sessionId = generateSessionId();
+            sessions.put(sessionId, new ConcurrentHashMap<>());
+            response.addCookie("SESSIONID", sessionId);
+        }
+
+        request.setSession(sessions.get(sessionId));
+    }
+}

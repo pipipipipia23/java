@@ -1,21 +1,18 @@
 package com.sellso.Component.Concac;
 
 import com.sellso.Component.Data.Box;
-import com.sellso.Component.MotThuGiDo.Reponse;
 
 import java.util.Map;
 import java.util.function.Function;
 
-public class Content {
+public class PostContent {
     public Function<Object, Object> ContentFrontEnd = (something) -> {
         Box box = (Box) something;
-        String contentType = box.getContentType() == null ? "text/html" : box.getContentType();
+        String contentType = box.getContentType() == null ? "application/json" : box.getContentType();
         StringBuilder content = new StringBuilder();
         content.append("HTTP/1.1 " + box.getStatus().getCode() + " " + box.getStatus().getMessage().split(" ", 2)[1] + "\r\n");
         
         if (box.getHeaders() != null && !box.getHeaders().isEmpty()) {
-            // phuong thuc Map.entrySet() tra ve tap hop cac entry (key-value) trong Map
-            // Map.Entry<String, String> header : box.getHeaders().entrySet() tra ve tung entry trong Map headers
             for (Map.Entry<String, String> header : box.getHeaders().entrySet()) {
                 content.append(header.getKey() + ": " + header.getValue() + "\r\n");
             }
